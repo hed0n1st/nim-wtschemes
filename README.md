@@ -14,14 +14,14 @@ If profiles or schemes names include spaces, use quotes!
 ```
 Usage:
   wtschemes profiles
-  wtschemes schemes [--local | --online]
-  wtschemes search <name>
-  wtschemes install <name>
-  wtschemes remove <name>
+  wtschemes list [--online]
+  wtschemes search <search>
+  wtschemes preview <scheme>
+  wtschemes install <scheme>
+  wtschemes remove <scheme>
   wtschemes set <profile> <scheme>
 
 Options:
-  -l, --local      List installed schemes.
   -o, --online     List online available schemes.
 ```
 

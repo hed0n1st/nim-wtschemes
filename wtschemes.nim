@@ -52,7 +52,6 @@ Usage:
   wtschemes set <profile> <scheme>
 
 Options:
-  -l, --local      List installed schemes.
   -o, --online     List online available schemes.
 """
 
