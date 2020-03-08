@@ -14,6 +14,8 @@ import
   htmlparser,
   xmltree
 
+import wNim/[wApp, wFrame, wPanel, wIcon, wImage, wBitmap, wStaticBitmap]
+
 const
   wtFolder = joinPath(
     getHomeDir(),
@@ -42,10 +44,11 @@ wtschemes: manage schemes in your windows terminal profiles.
 
 Usage:
   wtschemes profiles
-  wtschemes schemes [--local | --online]
-  wtschemes search <name>
-  wtschemes install <name>
-  wtschemes remove <name>
+  wtschemes list [--online]
+  wtschemes search <search>
+  wtschemes preview <scheme>
+  wtschemes install <scheme>
+  wtschemes remove <scheme>
   wtschemes set <profile> <scheme>
 
 Options:
@@ -93,6 +96,44 @@ proc updateProfiles(data: JsonNode) =
   defer: f.close()
   f.write(pretty(data, indent = 4))
 
+proc startPreview(scheme: string) =
+  let app = App()
+  let frame = Frame(title=fmt"{scheme}", style=wDefaultFrameStyle or wModalFrame)
+  frame.icon = Icon("", 0)
+  let preview = Bitmap(Image("preview.png").scale(650, 360))
+  frame.dpiAutoScale:
+    frame.size = (666, 398)
+    frame.maxSize = (666, 398)
+
+  let panel = Panel(frame)
+  let staticbitmap = StaticBitmap(panel, bitmap=preview)
+  staticbitmap.backgroundColor = -1
+
+  frame.center()
+  frame.show()
+  app.mainLoop()
+
+proc previewScheme(scheme: string) =
+  var png: string
+  for i, s in scheme.pairs:
+    if s.isUpperAscii():
+      case i
+      of 0: png &= s.toLowerAscii()
+      else: png &= "_" & s.toLowerAscii()
+    else:
+      png &= s
+
+  png = png.replace(" ", "_").replace("__", "_") & ".png"
+  var pngUrl = "/mbadolato/iTerm2-Color-Schemes/master/screenshots/" & png
+  pngUrl = githubRawUrl % [pngUrl]
+
+  try:
+    client.downloadFile(pngUrl, "preview.png")
+    startPreview(scheme)
+  except:
+    echo "error: preview failed"
+    quit()
+
 proc installScheme(iScheme: string) =
   let data = parseFile(wtProfiles)
   let schemes = onlineSchemes()
@@ -117,12 +158,12 @@ proc installScheme(iScheme: string) =
       let newData = parseJson(client.getContent(href))
       data["schemes"].add(newData)
       updateProfiles(data)
-      echo fmt"{iScheme} correctly added! You can now use set <profile> {iScheme}"
+      echo fmt"{iScheme} correctly added! You can now use: wtschemes set <profile> {iScheme}"
 
 proc removeScheme(rScheme: string) =
   let data = parseFile(wtProfiles)
   let profiles = parseProfiles()
-
+  var removed: bool = false
   for scheme in profiles.schemes:
     if scheme == rScheme:
 
@@ -133,7 +174,12 @@ proc removeScheme(rScheme: string) =
 
       data["schemes"] = newSchemes
       updateProfiles(data)
-      echo fmt"{rScheme} correctly removed!"
+      removed = true
+
+  if removed:
+    echo fmt"{rScheme} correctly removed!"
+  else:
+    echo fmt"error: {rScheme} seems not installed"
 
 proc setColorScheme(profile: string, scheme: string) =
   let profiles = parseProfiles()
@@ -163,30 +209,34 @@ when isMainModule:
     for p, profile in profiles.names.pairs:
       echo "profile: " & profile & " - colorscheme: " & profiles.colorSchemes[p]
 
-  if args["schemes"] and args["--local"]:
+  if args["list"] and not args["--online"]:
     let profiles = parseProfiles()
     for scheme in profiles.schemes:
       echo scheme
 
-  if args["schemes"] and args["--online"]:
+  if args["list"] and args["--online"]:
     let schemes = onlineSchemes()
     for name in schemes.names:
       echo name
 
   if args["search"]:
-    let search = $args["<name>"]
+    let search = $args["<search>"]
     let schemes = onlineSchemes()
     for n, name in schemes.names.pairs:
-      if name.contains(search):
+      if name.toLowerAscii.contains(search.toLowerAscii):
         let href = schemes.hrefs[n]
         echo fmt"name: {name} - url: {href}"
 
+  if args["preview"]:
+    let scheme = $args["<scheme>"]
+    previewScheme(scheme)
+
   if args["install"]:
-    let scheme = $args["<name>"]
+    let scheme = $args["<scheme>"]
     installScheme(scheme)
 
   if args["remove"]:
-    let scheme = $args["<name>"]
+    let scheme = $args["<scheme>"]
     removeScheme(scheme)
 
   if args["set"]:
