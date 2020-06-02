@@ -21,16 +21,16 @@ const
     getHomeDir(),
     "AppData\\Local\\Packages\\Microsoft.WindowsTerminal_8wekyb3d8bbwe\\LocalState"
   )
-  wtProfiles = joinPath(
+  wtSettings = joinPath(
     wtFolder,
-    "profiles.json"
+    "settings.json"
   )
   wtSchemesUrl = "https://github.com/mbadolato/iTerm2-Color-Schemes/tree/master/windowsterminal"
   githubRawUrl = "https://raw.githubusercontent.com$1"
 
 type
-  Profiles = object
-    names: seq[string]
+  Settings = object
+    profileNames: seq[string]
     colorSchemes : seq[string]
     schemes: seq[string]
     schemesNode: JsonNode
@@ -40,7 +40,7 @@ type
     hrefs: seq[string]
 
 let doc = """
-wtschemes: manage schemes in your windows terminal profiles.
+wtschemes: manage schemes in your windows terminal settings.
 
 Usage:
   wtschemes profiles
@@ -59,8 +59,8 @@ let args = docopt(doc, version="0.1")
 
 let client = newHttpClient()
 
-proc parseProfiles(): Profiles =
-  let data = parseFile(wtProfiles)
+proc parseSettings(): Settings =
+  let data = parseFile(wtSettings)
   let schemes = data["schemes"]
 
   result.schemesNode = schemes
@@ -70,7 +70,7 @@ proc parseProfiles(): Profiles =
 
   let profiles = data["profiles"]["list"]
   for profile in profiles:
-    result.names.add(profile["name"].getStr())
+    result.profileNames.add(profile["name"].getStr())
     try:
       result.colorSchemes.add(profile["colorScheme"].getStr())
     except KeyError:
@@ -89,9 +89,9 @@ proc onlineSchemes(): OnlineSchemes =
         result.names.add(name)
         result.hrefs.add(href)
 
-proc updateProfiles(data: JsonNode) =
-  copyFile(wtProfiles, joinPath(wtFolder, "profiles.json.bck"))
-  var f = open(wtProfiles, fmWrite)
+proc updateSettings(data: JsonNode) =
+  copyFile(wtSettings, joinPath(wtFolder, "settings.json.bck"))
+  var f = open(wtSettings, fmWrite)
   defer: f.close()
   f.write(pretty(data, indent = 4))
 
@@ -134,45 +134,45 @@ proc previewScheme(scheme: string) =
     quit()
 
 proc installScheme(iScheme: string) =
-  let data = parseFile(wtProfiles)
+  let data = parseFile(wtSettings)
   let schemes = onlineSchemes()
-  let profiles = parseProfiles()
+  let settings = parseSettings()
 
-  for scheme in profiles.schemes:
-    if scheme == iScheme:
+  var href: string
+  for n, name in schemes.names.pairs:
+    if $name == iScheme:
+      href = schemes.hrefs[n]
+      break
+
+  for scheme in settings.schemes:
+    if $scheme == iScheme:
       echo fmt"{iScheme} seems already installed!"
       quit()
 
-    var href: string
-    for n, name in schemes.names.pairs:
-      if iScheme == name:
-        href = schemes.hrefs[n]
-        break
-
-    case href
-    of "":
-      echo fmt"{iScheme} not found online!"
-      quit()
-    else:
-      let newData = parseJson(client.getContent(href))
-      data["schemes"].add(newData)
-      updateProfiles(data)
-      echo fmt"{iScheme} correctly added! You can now use: wtschemes set <profile> {iScheme}"
+  case href
+  of "":
+    echo fmt"{iScheme} not found online!"
+    quit()
+  else:
+    let newData = parseJson(client.getContent(href))
+    data["schemes"].add(newData)
+    updateSettings(data)
+    echo fmt"{iScheme} correctly added! You can now use: wtschemes set <profile> {iScheme}"
 
 proc removeScheme(rScheme: string) =
-  let data = parseFile(wtProfiles)
-  let profiles = parseProfiles()
+  let data = parseFile(wtSettings)
+  let settings = parseSettings()
   var removed: bool = false
-  for scheme in profiles.schemes:
+  for scheme in settings.schemes:
     if scheme == rScheme:
 
       var newSchemes = newJArray() #: JsonNode = %* []
-      for n in profiles.schemesNode:
+      for n in settings.schemesNode:
         if n["name"].getStr() != rScheme:
           newSchemes.add(n)
 
       data["schemes"] = newSchemes
-      updateProfiles(data)
+      updateSettings(data)
       removed = true
 
   if removed:
@@ -181,36 +181,36 @@ proc removeScheme(rScheme: string) =
     echo fmt"error: {rScheme} seems not installed"
 
 proc setColorScheme(profile: string, scheme: string) =
-  let profiles = parseProfiles()
+  let settings = parseSettings()
 
-  if not profiles.names.contains(profile):
+  if not settings.profileNames.contains(profile):
     echo "error: profile not found"
     quit()
 
-  if not profiles.schemes.contains(scheme):
+  if not settings.schemes.contains(scheme):
     echo "error: scheme not installed"
     quit()
 
-  let data = parseFile(wtProfiles)
+  let data = parseFile(wtSettings)
 
   var p = 0
   for list in data["profiles"]["list"]:
     if list["name"].getStr() == profile:
       data["profiles"]["list"][p]["colorScheme"] = newJString(scheme)
     inc p
-  updateProfiles(data)
+  updateSettings(data)
   echo fmt"{profile} new colorScheme: {scheme}. Enjoy!"
 
 when isMainModule:
 
   if args["profiles"]:
-    let profiles = parseProfiles()
-    for p, profile in profiles.names.pairs:
-      echo "profile: " & profile & " - colorscheme: " & profiles.colorSchemes[p]
+    let settings = parseSettings()
+    for p, profile in settings.profileNames.pairs:
+      echo "profile: " & profile & " - colorscheme: " & settings.colorSchemes[p]
 
   if args["list"] and not args["--online"]:
-    let profiles = parseProfiles()
-    for scheme in profiles.schemes:
+    let settings = parseSettings()
+    for scheme in settings.schemes:
       echo scheme
 
   if args["list"] and args["--online"]:
